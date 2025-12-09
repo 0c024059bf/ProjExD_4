@@ -180,15 +180,19 @@ class Beam(pg.sprite.Sprite):
     """
     ビームに関するクラス
     """
-    def __init__(self, bird: Bird):
+    
+    def __init__(self, bird: Bird, angle0=0):
         """
         ビーム画像Surfaceを生成する
         引数 bird：ビームを放つこうかとん
+        引数 angle0：ビームの回転角度に加算する角度（デフォルト0）
         """
         super().__init__()
         self.vx, self.vy = bird.dire
-        angle = math.degrees(math.atan2(-self.vy, self.vx))
+        # 現在の移動方向に基づいた角度を計算し、angle0を加算
+        angle = math.degrees(math.atan2(-self.vy, self.vx)) + angle0
         self.image = pg.transform.rotozoom(pg.image.load(f"fig/beam.png"), angle, 1.0)
+        # 進行方向ベクトルを計算し直す
         self.vx = math.cos(math.radians(angle))
         self.vy = -math.sin(math.radians(angle))
         self.rect = self.image.get_rect()
@@ -204,6 +208,40 @@ class Beam(pg.sprite.Sprite):
         self.rect.move_ip(self.speed*self.vx, self.speed*self.vy)
         if check_bound(self.rect) != (True, True):
             self.kill()
+
+
+# 弾幕機能のためのNeoBeamクラスを残します
+class NeoBeam:
+    """
+    複数方向へビームを生成するクラス（弾幕）
+    """
+    def __init__(self, bird: Bird, num: int): 
+        """
+        NeoBeamインスタンスを生成する
+        引数1 bird：ビームを放つこうかとん
+        引数2 num：生成するビームの数
+        """
+        self.bird = bird
+        self.num = num
+    
+    def gen_beams(self) -> list[Beam]:
+        """
+        指定されたビーム数に基づいて、-50度から+50度の範囲でビームを生成し、リストで返す
+        """
+        beams = []
+        
+        if self.num == 1:
+            angles = [0]
+        else:
+            # 範囲: -50度から+50度 (100度の幅)
+            # ステップ = 100 / (ビーム数 - 1)
+            step = 100 / (self.num - 1)
+            angles = [-50 + i * step for i in range(self.num)]
+        
+        for angle in angles:
+            beams.append(Beam(self.bird, angle0=angle))
+            
+        return beams
 
 
 class Explosion(pg.sprite.Sprite):
@@ -378,7 +416,20 @@ def main():
         for event in pg.event.get():
             if event.type == pg.QUIT:
                 return 0
+            
+            ###  修正箇所：キーダウンイベントで発射を判定する 
             if event.type == pg.KEYDOWN and event.key == pg.K_SPACE:
+                # 押された瞬間にLeft Shiftキーの状態をチェックする
+                if key_lst[pg.K_LSHIFT]:
+                    # 【弾幕発射】Left Shift + Space
+                    beam_count = 5 
+                    neo_beam = NeoBeam(bird, beam_count)
+                    beams.add(neo_beam.gen_beams())
+                else:
+                    # 【通常発射】Space単体
+                    beams.add(Beam(bird))
+            ###  修正箇所ここまで 
+                
                 beams.add(Beam(bird))
             if event.type == pg.KEYDOWN and event.key == pg.K_e:
                 if score.value >= 20:
@@ -394,7 +445,8 @@ def main():
                     shields.add(Shield(bird))
                     score.value -= 50  # スコア消費
         screen.blit(bg_img, [0, 0])
-
+        
+        
         if tmr%200 == 0:  # 200フレームに1回，敵機を出現させる
             emys.add(Enemy())
 
